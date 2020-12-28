@@ -157,10 +157,14 @@ def main():
     # 학습 완료된 모델을 재사용하기 위해 저장
     model.save(f'{epochs}epochs_{batch_size}batch_cnn_model_{data_directory}.h5'.replace("/", "_"), overwrite=True)
     # del model  # deletes the existing model
+    # 테스트 데이터와 학습한 모델을 사용해 예측값 출력
     predicted = model.predict(X_test)
+    # one-hot encoding으로 되어 있는 예측값과 실제 레이블 데이터를 다른 범주롤 변화한다
     y_pred = np.argmax(predicted, axis=1)
     Y_test = np.argmax(Y_test, axis=1)
+    # sklearn에서 제공하는 혼동 행렬 분석 함수 호출
     cm = confusion_matrix(Y_test, y_pred)
+    # 혼동 행렬에서 계산된 수치로 더 많은 수치를 계산하는 report 함수 호출
     report = classification_report(Y_test, y_pred)
     tn = cm[0][0]
     fn = cm[1][0]
