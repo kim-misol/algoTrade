@@ -1,13 +1,12 @@
-import pandas as pd
-import numpy as np
 import matplotlib
+import pandas as pd
+
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
-import glob
 import argparse
 import os
-from shutil import copyfile, move
+from shutil import move
 from pathlib import Path
 
 # https://github.com/matplotlib/mpl_finance
@@ -24,7 +23,7 @@ def isnan(value):
 
 
 def removeOutput(finput):
-    if(Path(finput)).is_file():
+    if (Path(finput)).is_file():
         os.remove(finput)
 
 
@@ -57,15 +56,17 @@ def main():
         countImage(args.input)
 
 
+# 데이터 불러오기 - 학습데이터를 종목코드별로 폴더로 옮긴다
 def image2dataset(input, label_file):
-    
     label_dict = {}
+    # 만들어 둔 레이블 데이터를 읽어온다.
     with open(label_file) as f:
         for line in f:
             (key, val) = line.split(',')
             label_dict[key] = val.rstrip()
-    
-    path = "{}/{}".format(os.getcwd(), input)
+
+    # path = "{}/{}".format(os.getcwd(), input)
+    path = f"{os.getcwd()}/{input}"
 
     for filename in os.listdir(path):
         # print(filename)
@@ -75,7 +76,8 @@ def image2dataset(input, label_file):
                 splitname = filename.split("_")
                 f, e = os.path.splitext(filename)
                 # print("[DEBUG] - {}".format(splitname))
-                newname = "{}_{}".format(splitname[0], splitname[1])
+                # newname = "{}_{}".format(splitname[0], splitname[1])
+                newname = f"{splitname[0]}_{splitname[1]}"
                 if newname == k:
                     # print("{} same with {} with v {}".format(filename, k, v))
                     new_name = "{}{}.png".format(v, f)
@@ -85,18 +87,24 @@ def image2dataset(input, label_file):
                     break
 
     folders = ['1', '0']
+    # 캔들차트 이미지 분류를 위해 디랙터리 생성
     for folder in folders:
-        if not os.path.exists("{}/classes/{}".format(path, folder)):
-            os.makedirs("{}/classes/{}".format(path, folder))
+        # if not os.path.exists("{}/classes/{}".format(path, folder)):
+        # os.makedirs("{}/classes/{}".format(path, folder))
+        if not os.path.exists(f"{path}/classes/{folder}"):
+            os.makedirs(f"{path}/classes/{folder}")
 
+    # path 경로에 있는 파일을 찾아 특정 디랙터리를 제외한 모든 캔들차트 파일은 레이블 폴더로 옮긴다
     for filename in os.listdir(path):
         if filename is not '' and filename is not 'classes':
             # print(filename[:1])
             ### 여기에 for k,v in label_dict.items() 돌면서
             f, e = os.path.splitext(filename)
+            # 레이블이 1인 경우
             if label_dict[f] == "1":
                 move("{}/{}".format(path, filename),
                      "{}/classes/1/{}".format(path, filename))
+            # 레이블이 0인 경우
             elif label_dict[f] == "0":
                 move("{}/{}".format(path, filename),
                      "{}/classes/0/{}".format(path, filename))
@@ -104,12 +112,15 @@ def image2dataset(input, label_file):
     print('Done')
 
 
+# 데이터셋 준비하기 - 저장된 데이터를 불러와 처리하는 과정
 def createLabel(fname, seq_len):
     # python preprocess.py -m createLabel -l 20 -i stockdatas/EWT_training5.csv
     print("Creating label . . .")
     # remove existing label file
+    # 데이터가 업데이트 될 경우를 대비해 기존에 만든 레이블 데이터 삭제
     filename = fname.split('/')
     # print("{} - {}".format(filename[0], filename[1][:-4]))
+    # 개별 종목 데이터 가져오기
     removeOutput("{}_label_{}.txt".format(filename[1][:-4], seq_len))
 
     df = pd.read_csv(fname, parse_dates=True, index_col=0)
@@ -118,24 +129,29 @@ def createLabel(fname, seq_len):
     df.reset_index(inplace=True)
     df['Date'] = df['Date'].map(mdates.date2num)
     for i in range(0, len(df)):
+        # ix: dataframe의 인덱스 접근자 (iloc 인덱서와 유사)
+        # seq_len 단위로 dataframe을 슬라이싱해 기간별 레이블링 작업을 준비
         c = df.ix[i:i + int(seq_len), :]
 
         starting = 0
         endvalue = 0
         label = ""
-        
-        if len(c) == int(seq_len)+1:  ## 여기서 안나왔겠지. 마지막 부분이. 3450 3449
+
+        if len(c) == int(seq_len) + 1:  ## 여기서 안나왔겠지. 마지막 부분이. 3450 3449
             # starting = c["Close"].iloc[-2]
             starting = c["Open"].iloc[-1]
             endvalue = c["Close"].iloc[-1]
             # print(f'endvalue {endvalue} - starting {starting}')
-            tmp_rtn = endvalue / starting -1
+            # 다음날 시가대비 종가로 레이블 만든다.
+            #  올라갔으면 1, 내려갔으면 0
+            tmp_rtn = endvalue / starting - 1
             if tmp_rtn > 0:
                 label = 1
             else:
                 label = 0
 
             with open("{}_label_{}.txt".format(filename[1][:-4], seq_len), 'a') as the_file:
+                # 데이터 구간별 레이블을 만들기 위해 덮어씌운다.
                 the_file.write("{}-{},{}".format(filename[1][:-4], i, label))
                 the_file.write("\n")
     print("Create label finished.")
@@ -147,6 +163,7 @@ def countImage(input):
     print("num of files : {}\nnum of dir : {}".format(num_file, num_dir))
 
 
+# 데이터셋 준비하기 - 캔들차트 그리기
 def ohlc2cs(fname, seq_len, dataset_type, dimension, use_volume):
     # python preprocess.py -m ohlc2cs -l 20 -i stockdatas/EWT_testing.csv -t testing
     print("Converting ohlc to candlestick")
@@ -155,8 +172,9 @@ def ohlc2cs(fname, seq_len, dataset_type, dimension, use_volume):
     print(symbol)
     path = "{}".format(os.getcwd())
     # print(path)
+    # 캔들 데이터를 저장한 디렉토리 준비
     if not os.path.exists("{}/dataset/{}_{}/{}/{}".format(path, seq_len, dimension, symbol, dataset_type)):
-        os.makedirs("{}/dataset/{}_{}/{}/{}".format(path,seq_len, dimension, symbol, dataset_type))
+        os.makedirs("{}/dataset/{}_{}/{}/{}".format(path, seq_len, dimension, symbol, dataset_type))
 
     df = pd.read_csv(fname, parse_dates=True, index_col=0)
     df.fillna(0)
@@ -164,16 +182,19 @@ def ohlc2cs(fname, seq_len, dataset_type, dimension, use_volume):
     df.reset_index(inplace=True)
     df['Date'] = df['Date'].map(mdates.date2num)
     # for i in range(0, len(df)):
-    for i in range(0, len(df)-int(seq_len)):
+    # 마지막 일수 미만인 경우를 제외하기 위해 캔들차트 입력 일자 간격만큼 뒤에서 빼준다
+    for i in range(0, len(df) - int(seq_len)):
         # ohlc+volume
+        # 캔들차트를 그릴 소스 데이터 불러오기
         c = df.ix[i:i + int(seq_len) - 1, :]
         if len(c) == int(seq_len):
             my_dpi = 96
             fig = plt.figure(figsize=(dimension / my_dpi,
                                       dimension / my_dpi), dpi=my_dpi)
             ax1 = fig.add_subplot(1, 1, 1)
-            candlestick2_ochl(ax1, c['Open'], c['Close'], c['High'],c['Low'],
-                              width=1,colorup='#77d879', colordown='#db3f3f')
+            # candlestick2_ochl 함수를 호출해 캔들차트 그린다
+            candlestick2_ochl(ax1, c['Open'], c['Close'], c['High'], c['Low'],
+                              width=1, colorup='#77d879', colordown='#db3f3f')
             ax1.grid(False)
             ax1.set_xticklabels([])
             ax1.set_yticklabels([])
@@ -183,6 +204,7 @@ def ohlc2cs(fname, seq_len, dataset_type, dimension, use_volume):
 
             # create the second axis for the volume bar-plot
             # Add a seconds axis for the volume overlay
+            # 거래량 데이터 사용 여부 (True/False)에 따라 캔들차트에 추가
             if use_volume:
                 ax2 = ax1.twinx()
                 # Plot the volume overlay
@@ -197,6 +219,7 @@ def ohlc2cs(fname, seq_len, dataset_type, dimension, use_volume):
                 ax2.axis('off')
             pngfile = 'dataset/{}_{}/{}/{}/{}-{}.png'.format(
                 seq_len, dimension, symbol, dataset_type, fname[11:-4], i)
+            # 완성된 캔들을 이미지로 저장
             fig.savefig(pngfile, pad_inches=0, transparent=False)
             plt.close(fig)
 
