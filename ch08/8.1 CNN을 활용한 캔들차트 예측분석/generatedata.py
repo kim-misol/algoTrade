@@ -1,6 +1,6 @@
 import os
-from shutil import copyfile
 import sys
+from shutil import copyfile
 
 
 def cre8outputdir(pathdir, targetdir):
@@ -33,39 +33,38 @@ targetdir = sys.argv[3]
 
 cre8outputdir(pathdir, targetdir)
 
+# 데이터 불러오기
 counttest = 0
 counttrain = 0
-for root, dirs, files in os.walk("{}/{}".format(pathdir, origindir)):
+# os.walk 함수로 현재 디렉터리의 파일과 하위 디렉터리를 순차적으로 순회
+for root, dirs, files in os.walk(f"{pathdir}/{origindir}"):
     for file in files:
 
-
-        tmp = root.replace('\\','/')
+        tmp = root.replace('\\', '/')
         tmp_label = tmp.split('/')[-1]
 
+        # 레이블이 0인 데이터를 해당 폴더에 원본을 보관하고, 복사본은 다른 경로로 이동시켜 추후 학습에 사용
         if tmp_label == '0':
             if 'test' in file:
-                origin = "{}/{}".format(root, file)
-                destination = "{}/{}/test/0/{}".format(
-                    pathdir, targetdir, file)
+                origin = f"{root}/{file}"
+                destination = f"{pathdir}/{targetdir}/test/0/{file}"
                 copyfile(origin, destination)
                 counttest += 1
             elif 'train' in file:
-                origin = "{}/{}".format(root, file)
-                destination = "{}/{}/train/0/{}".format(
-                    pathdir, targetdir, file)
+                origin = f"{root}/{file}"
+                destination = f"{pathdir}/{targetdir}/train/0/{file}"
                 copyfile(origin, destination)
                 counttrain += 1
+        # 레이블이 1인 데이터를 해당 폴더에 원본을 보관하고, 복사본은 다른 경로로 이동시켜 추후 학습에 사용
         elif tmp_label == '1':
             if 'test' in file:
-                origin = "{}/{}".format(root, file)
-                destination = "{}/{}/test/1/{}".format(
-                    pathdir, targetdir, file)
+                origin = f"{root}/{file}"
+                destination = f"{pathdir}/{targetdir}/test/1/{file}"
                 copyfile(origin, destination)
                 counttest += 1
             elif 'train' in file:
-                origin = "{}/{}".format(root, file)
-                destination = "{}/{}/train/1/{}".format(
-                    pathdir, targetdir, file)
+                origin = f"{root}/{file}"
+                destination = f"{pathdir}/{targetdir}/train/1/{file}"
                 copyfile(origin, destination)
                 counttrain += 1
 
